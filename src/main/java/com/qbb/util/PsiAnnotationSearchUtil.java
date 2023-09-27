@@ -3,11 +3,7 @@ package com.qbb.util;
 import com.intellij.codeInsight.AnnotationUtil;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.psi.PsiAnnotation;
-import com.intellij.psi.PsiAnnotationOwner;
-import com.intellij.psi.PsiJavaCodeReferenceElement;
-import com.intellij.psi.PsiModifierList;
-import com.intellij.psi.PsiModifierListOwner;
+import com.intellij.psi.*;
 import com.intellij.psi.impl.source.SourceJavaCodeReference;
 import com.intellij.util.ArrayUtil;
 import org.jetbrains.annotations.NotNull;
@@ -15,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.annotation.Annotation;
 import java.util.Collection;
+import java.util.List;
 import java.util.regex.Pattern;
 
 public class PsiAnnotationSearchUtil {
@@ -219,6 +216,42 @@ public class PsiAnnotationSearchUtil {
         }
 
         return AnnotationUtil.getStringAttributeValue(annotation, paramName);
+    }
+
+    /**
+     * 获取注解某个值
+     * Object类型
+     *
+     * @param psiParameter
+     * @param annotationName
+     * @return Object类型
+     */
+    public static Object getPsiParameterAnnotationObjParam(PsiModifierListOwner psiParameter, String annotationName, String paramName) {
+        PsiAnnotation annotation = PsiAnnotationSearchUtil.findAnnotation(psiParameter, annotationName);
+        if (annotation == null) {
+            return null;
+        }
+
+        return getAttributeValue(annotation, paramName);
+    }
+
+    public static String getPsiParameterAnnotationAttributeName(PsiModifierListOwner psiParameter, String annotationName, String attributeName) {
+        PsiAnnotation annotation = PsiAnnotationSearchUtil.findAnnotation(psiParameter, annotationName);
+        if (annotation == null) {
+            return null;
+        }
+        PsiAnnotationMemberValue attrValue = annotation.findAttributeValue(attributeName);
+        if (attrValue == null) {
+            return null;
+        }
+        return attrValue.getText();
+    }
+
+    public static Object getAttributeValue(@NotNull PsiAnnotation anno, @Nullable final String attributeName) {
+        PsiAnnotationMemberValue attrValue = anno.findAttributeValue(attributeName);
+
+        PsiConstantEvaluationHelper evaluationHelper = JavaPsiFacade.getInstance(attrValue.getProject()).getConstantEvaluationHelper();
+        return evaluationHelper.computeConstantExpression(attrValue);
     }
 
 }

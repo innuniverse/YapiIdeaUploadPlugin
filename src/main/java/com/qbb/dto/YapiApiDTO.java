@@ -69,6 +69,11 @@ public class YapiApiDTO implements Serializable{
      */
     private String status;
 
+    /**
+     * 版本
+     */
+    private List<String> tags;
+
 
     public String getPath() {
         return path;
@@ -174,6 +179,14 @@ public class YapiApiDTO implements Serializable{
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public List<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(List<String> tags) {
+        this.tags = tags;
     }
 
     public YapiApiDTO() {

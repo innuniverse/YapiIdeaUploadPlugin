@@ -2,7 +2,7 @@ package com.qbb.component;
 
 import com.intellij.util.ui.JBUI;
 import com.qbb.dto.ConfigDTO;
-import sun.swing.DefaultLookup;
+//import sun.swing.DefaultLookup;
 
 import javax.swing.*;
 import javax.swing.border.Border;
@@ -177,8 +177,10 @@ public class ItemComponent extends JPanel implements ListCellRenderer<ConfigDTO>
         Color bg, fg;
         JList.DropLocation dropLocation = list.getDropLocation();
         if (dropLocation != null && !dropLocation.isInsert() && dropLocation.getIndex() == index) {
-            bg = DefaultLookup.getColor(this, ui, "List.dropCellBackground");
-            fg = DefaultLookup.getColor(this, ui, "List.dropCellForeground");
+//            bg = DefaultLookup.getColor(this, ui, "List.dropCellBackground");
+//            fg = DefaultLookup.getColor(this, ui, "List.dropCellForeground");
+            bg = isSelected ? list.getSelectionBackground() : list.getBackground();
+            fg = isSelected ? list.getSelectionForeground() : list.getForeground();
             isSelected = true;
         }
         else {

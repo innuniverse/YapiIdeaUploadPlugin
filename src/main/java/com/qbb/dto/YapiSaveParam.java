@@ -115,6 +115,11 @@ public class YapiSaveParam implements Serializable{
      */
     private String menu;
 
+    /**
+     * 版本
+     */
+    private List<String> tags;
+
 
     public String getToken() {
         return token;
@@ -315,6 +320,14 @@ public class YapiSaveParam implements Serializable{
 
     public void setMenu(String menu) {
         this.menu = menu;
+    }
+
+    public void setTags(List<String> tags){
+        this.tags = tags;
+    }
+
+    public List<String> getTags() {
+        return tags;
     }
 
     public YapiSaveParam() {

@@ -1,6 +1,7 @@
 package com.qbb.builder;
 
 import com.google.common.base.Strings;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationDisplayType;
@@ -11,21 +12,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
-import com.intellij.psi.JavaPsiFacade;
-import com.intellij.psi.PsiAnnotation;
-import com.intellij.psi.PsiAnnotationMemberValue;
-import com.intellij.psi.PsiArrayType;
-import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiEnumConstant;
-import com.intellij.psi.PsiField;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiNameValuePair;
-import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiPrimitiveType;
-import com.intellij.psi.PsiReference;
-import com.intellij.psi.PsiType;
+import com.intellij.psi.*;
 import com.intellij.psi.impl.compiled.ClsFileImpl;
 import com.intellij.psi.impl.source.PsiClassReferenceType;
 import com.intellij.psi.impl.source.PsiJavaFileImpl;
@@ -41,10 +28,7 @@ import com.qbb.dto.YapiHeaderDTO;
 import com.qbb.dto.YapiPathVariableDTO;
 import com.qbb.dto.YapiQueryDTO;
 import com.qbb.upload.UploadYapi;
-import com.qbb.util.DesUtil;
-import com.qbb.util.FileToZipUtil;
-import com.qbb.util.FileUnZipUtil;
-import com.qbb.util.PsiAnnotationSearchUtil;
+import com.qbb.util.*;
 import org.apache.commons.lang.StringUtils;
 
 import java.io.File;
@@ -170,6 +154,20 @@ public class BuildJsonForYapi {
             Notification info = notificationGroup.createNotification("apiOperation:" + operation, NotificationType.INFORMATION);
             Notifications.Bus.notify(info, project);
             yapiApiDTO.setTitle(operation);
+        }
+        // 获取版本号
+        Object tags = PsiAnnotationSearchUtil.getPsiParameterAnnotationObjParam(psiMethodTarget, SwaggerConstants.API_OPERATION, "tags");
+        if (tags != null) {
+            Notification info = notificationGroup.createNotification("tags:" + tags, NotificationType.INFORMATION);
+            Notifications.Bus.notify(info, project);
+
+            List<String> tagList = null;
+            if (tags instanceof String) {
+                tagList = Arrays.asList(((String)tags).split(","));
+            } else if(tags instanceof List) {
+                tagList = TypeCastUtil.castList(tags, String.class);
+            }
+            yapiApiDTO.setTags(tagList);
         }
         yapiApiDTO.setPath(path.toString());
 
@@ -355,6 +353,7 @@ public class BuildJsonForYapi {
         }
         return null;
     }
+
 
     /**
      * @description: 获得请求参数
@@ -693,7 +692,9 @@ public class BuildJsonForYapi {
             result.set("description", psiType.getPresentableText());
             result.set("items", listKv);
             return result;
-        } else if (psiType.getPresentableText().startsWith("Map") || psiType.getPresentableText().startsWith("HashMap") || psiType.getPresentableText().startsWith("LinkedHashMap")) {
+        } else if (psiType.getPresentableText().startsWith("Map")
+                || psiType.getPresentableText().startsWith("HashMap")
+                || psiType.getPresentableText().startsWith("LinkedHashMap")) {
             KV kv1 = new KV();
             kv1.set(KV.by("type", "object"));
             kv1.set(KV.by("description", "(该参数为map)"));
@@ -772,9 +773,12 @@ public class BuildJsonForYapi {
                         continue;
                     }
                     //如果是有notnull 和 notEmpty 注解就加入必填
+                    // @ApiModelProperty注解 required属性为true, 必填
+                    String required = PsiAnnotationSearchUtil.getPsiParameterAnnotationAttributeName(field, SwaggerConstants.API_MODEL_PROPERTY, "required");
                     if (Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotNull))
                             || Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotEmpty))
-                            || Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotBlank))) {
+                            || Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotBlank))
+                            || Boolean.TRUE.toString().equals(required)) {
                         requiredList.add(field.getName());
                     }
                     Set<String> pNameList = new HashSet<>();
@@ -794,9 +798,12 @@ public class BuildJsonForYapi {
                             continue;
                         }
                         //如果是有notnull 和 notEmpty 注解就加入必填
+                        // @ApiModelProperty注解 required属性为true, 必填
+                        String required = PsiAnnotationSearchUtil.getPsiParameterAnnotationAttributeName(field, SwaggerConstants.API_MODEL_PROPERTY, "required");
                         if (Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotNull))
                                 || Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotEmpty))
-                                || Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotBlank))) {
+                                || Objects.nonNull(PsiAnnotationSearchUtil.findAnnotation(field, JavaConstant.NotBlank))
+                                || Boolean.TRUE.toString().equals(required)) {
                             requiredList.add(field.getName());
                         }
                         Set<String> pNameList = new HashSet<>();
@@ -986,6 +993,25 @@ public class BuildJsonForYapi {
                 //class type
                 KV kv1 = new KV();
                 PsiClass psiClass = PsiUtil.resolveClassInType(type);
+
+                // bugfix: 处理返回实体类中包装PageInfo分页解析不出list包装的对象
+                // 例如：Result<GetCustomerAddressDetailResponseDto>
+                //      GetCustomerAddressDetailResponseDto {
+                //         PageInfo<GetCustomerAddressListResponseDto> pageInfo;
+                //         int count;
+                //       }
+                if(fieldTypeName.startsWith("PageInfo<")) {
+                    String internalCanonicalText = type.getInternalCanonicalText();
+                    String[] pageInfoTypes = internalCanonicalText.split("<");
+                    List<String> childTypeList = new ArrayList<>(childType.length);
+                    Collections.addAll(childTypeList, childType);
+                    String pageInfoListType = pageInfoTypes[1].split(">")[0];
+                    if (!childTypeList.contains(pageInfoListType)) {
+                        childTypeList.add(pageInfoListType);
+                    }
+                    childType = childTypeList.toArray(new String[childTypeList.size()]);
+                }
+
                 kv1.set(KV.by("type", "object"));
                 kv1.set(KV.by("description", (Strings.isNullOrEmpty(remark) ? ("" + psiClass.getName().trim()) : (remark + " ," + psiClass.getName()).trim())));
                 if (!pNames.contains(((PsiClassReferenceType) type).getClassName())) {
